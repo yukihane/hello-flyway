@@ -1,0 +1,86 @@
+## これは何？
+
+https://flywaydb.org/[Flyway] の使い方を調べた記録です。
+
+## 環境セットアップ
+
+### MySQLの準備
+
+サーバはDockerコンテナで用意することにします。
+
+----
+sudo apt install mysql-client
+----
+----
+docker run --name some-mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=my-secret-pw -d mysql:latest
+----
+
+サーバにログインしてユーザとDBを作成しておきます。
+
+----
+mysql -uroot -pmy-secret-pw --protocol=tcp
+----
+でサーバに接続し、次のSQLを実行します:
+----
+create database mydb;
+create user 'myuser'@'%' identified BY 'mypass';
+grant all privileges on mydb.* to 'myuser'@'%';
+----
+
+## Flyway 実行
+
+https://flywaydb.org/documentation/getstarted/firststeps/commandline#migrating-the-database[リファレンス]に書かれているSQLをバージョニングしてみます。
+
+コンフィグに次の設定を記入します。
+
+.conf/flyway.conf
+----
+flyway.url=jdbc:mysql://localhost:3306/mydb
+flyway.user=myuser
+flyway.password=mypass
+----
+
+SQLはリファレンスの通りのものを用意します。
+
+.sql/V1__Create_person_table.sql
+----
+create table PERSON (
+    ID int not null,
+    NAME varchar(100) not null
+);
+----
+
+コマンドを実行します。
+----
+./flyway migrate
+----
+
+続いてV2のSQLも用意し、同じくmigrateします。
+
+.sql/V2__Add_people.sql
+----
+insert into PERSON (ID, NAME) values (1, 'Axel');
+insert into PERSON (ID, NAME) values (2, 'Mr. Foo');
+insert into PERSON (ID, NAME) values (3, 'Ms. Bar');
+----
+
+----
+./flyway migrate
+----
+
+## 途中からFlywayを導入する
+
+上記で設定したテーブルは、flywayでなく手動で導入した、というふうに設定します。 `flyway_schema_history` を drop すればよいです。
+
+----
+// (MySQLにログインして)
+drop table flyway_schema_history;
+----
+
+この状態からFlyway管理下に置くには、 https://flywaydb.org/documentation/command/baseline[`baseline`] コマンドを実行すれば良いようです。
+
+----
+./flyway -baselineVersion=2 baseline
+----
+
+上記コマンドにより、V2まで適用した、ということにできます。
